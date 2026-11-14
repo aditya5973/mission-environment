@@ -3,7 +3,7 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip,
   ResponsiveContainer, ReferenceLine, CartesianGrid,
 } from 'recharts'
-import { getSpaceWeather } from '../data/spaceWeather'
+import { getSpaceWeather, applyStorm } from '../data/spaceWeather'
 
 const LEVELS = {
   low: {
@@ -32,6 +32,12 @@ const KIND_STYLE = {
   'SUMMARY': 'bg-slate-700 text-slate-200',
 }
 
+const SOURCE_BADGE = {
+  live: { text: 'Live data', cls: 'bg-emerald-900 text-emerald-200' },
+  sample: { text: 'Sample data', cls: 'bg-amber-900 text-amber-200' },
+  simulation: { text: 'Simulation', cls: 'bg-violet-900 text-violet-200' },
+}
+
 const fmt = t =>
   new Date(t).toLocaleString([], {
     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
@@ -51,6 +57,7 @@ function Card({ title, children }) {
 export default function MissionEnvironment() {
   const [data, setData] = useState(null)
   const [updated, setUpdated] = useState(null)
+  const [storm, setStorm] = useState(false)
 
   useEffect(() => {
     const load = () =>
@@ -65,8 +72,10 @@ export default function MissionEnvironment() {
 
   if (!data) return <p className="p-8 text-slate-300">Loading space weather…</p>
 
-  const { summary, alerts, protons, source } = data
+  const view = storm ? applyStorm(data) : data
+  const { summary, alerts, protons, source } = view
   const level = LEVELS[summary.radiationLevel]
+  const badge = SOURCE_BADGE[source]
   const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
   const recentAlerts = alerts.filter(a => new Date(a.time).getTime() >= weekAgo)
 
@@ -75,21 +84,35 @@ export default function MissionEnvironment() {
       <div className="mx-auto max-w-5xl space-y-6">
 
         {/* Header */}
-        <header className="flex flex-wrap items-center justify-between gap-2">
+        <header className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold">Mission Environment</h1>
             <p className="text-sm text-slate-400">
               Near-Earth space weather (NOAA SWPC, GOES satellites), used as a proxy for the mission environment
             </p>
           </div>
-          <span
-            className={`rounded-full px-3 py-1 text-xs font-semibold ${
-              source === 'live' ? 'bg-emerald-900 text-emerald-200' : 'bg-amber-900 text-amber-200'
-            }`}
-          >
-            {source === 'live' ? 'Live data' : 'Sample data'}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${badge.cls}`}>
+              {badge.text}
+            </span>
+            <button
+              onClick={() => setStorm(s => !s)}
+              className={`rounded-lg px-3 py-2 text-sm font-semibold ${
+                storm
+                  ? 'bg-slate-700 text-slate-100 hover:bg-slate-600'
+                  : 'bg-red-600 text-white hover:bg-red-500'
+              }`}
+            >
+              {storm ? 'Stop simulation' : 'Simulate solar storm'}
+            </button>
+          </div>
         </header>
+
+        {storm && (
+          <div className="rounded-lg border border-violet-500 bg-violet-950 p-3 text-sm text-violet-200">
+            Simulation mode: the radiation event below is generated for demonstration and is not real data.
+          </div>
+        )}
 
         {/* Status banner */}
         <div className={`rounded-xl border-2 p-5 ${level.box}`}>
@@ -97,6 +120,21 @@ export default function MissionEnvironment() {
           <p className="text-3xl font-bold">{level.label}</p>
           <p className="mt-1">{level.note}</p>
         </div>
+
+        {/* Recommended actions, only during a storm */}
+        {summary.radiationLevel === 'high' && (
+          <Card title="Recommended actions (illustrative)">
+            <ul className="list-disc space-y-1 pl-5 text-sm text-slate-300">
+              <li>Follow the mission radiation-safety protocol, including any shielded-area procedures.</li>
+              <li>Notify mission control and the medical officer.</li>
+              <li>Review planned outside-vehicle activity with mission control.</li>
+              <li>Increase the frequency of health check-ins (see Health Analytics).</li>
+            </ul>
+            <p className="mt-2 text-xs text-slate-500">
+              Illustrative guidance only. Real responses require validated mission protocols.
+            </p>
+          </Card>
+        )}
 
         {/* Stat cards */}
         <div className="grid gap-4 sm:grid-cols-3">
@@ -148,7 +186,14 @@ export default function MissionEnvironment() {
                   strokeDasharray="6 4"
                   label={{ value: 'NOAA S1 radiation storm threshold (10 pfu)', fill: '#fca5a5', fontSize: 12, position: 'insideTopLeft' }}
                 />
-                <Line type="monotone" dataKey="flux" stroke="#38bdf8" dot={false} strokeWidth={2} />
+                <Line
+                  type="monotone"
+                  dataKey="flux"
+                  stroke={storm ? '#c084fc' : '#38bdf8'}
+                  dot={false}
+                  strokeWidth={2}
+                  isAnimationActive={false}
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -168,6 +213,11 @@ export default function MissionEnvironment() {
                       {a.scale && (
                         <span className="rounded bg-violet-900 px-2 py-0.5 text-xs font-semibold text-violet-200">
                           {a.scale}
+                        </span>
+                      )}
+                      {a.id === 'simulated-storm' && (
+                        <span className="rounded bg-fuchsia-900 px-2 py-0.5 text-xs font-semibold text-fuchsia-200">
+                          SIMULATED
                         </span>
                       )}
                       <span className="text-xs text-slate-400">{fmt(a.time)}</span>

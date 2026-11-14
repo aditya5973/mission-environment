@@ -73,3 +73,30 @@ export async function getSpaceWeather() {
     }
   }
 }
+
+// Demo only: turns the last ~3 hours of the proton chart into a storm ramp
+// and adds a clearly labelled simulated alert. Never mixes with real data.
+export function applyStorm(data) {
+  const n = Math.min(36, data.protons.length)
+  const ramp = data.protons.slice(-n).map((p, i) => ({
+    time: p.time,
+    flux: 0.2 * Math.pow(10, 2.3 * (i / (n - 1))),
+  }))
+  const protons = data.protons.slice(0, -n).concat(ramp)
+  const simAlert = {
+    id: 'simulated-storm',
+    time: new Date().toISOString(),
+    kind: 'ALERT',
+    headline: 'ALERT: Proton flux (≥10 MeV) exceeded 10 pfu (SIMULATED)',
+    scale: 'S1',
+    raw: 'Simulated event for demonstration only. This is not real NOAA data.',
+  }
+  const alerts = [simAlert, ...data.alerts]
+  return {
+    ...data,
+    source: 'simulation',
+    alerts,
+    protons,
+    summary: buildSummary(alerts, protons),
+  }
+}
